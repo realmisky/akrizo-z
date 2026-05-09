@@ -1,0 +1,19 @@
+{
+  "name": "nocoin-miner",
+  "version": "1.0.0",
+  "description": "Auto-mining soul.md agent for $NOCOIN",
+  "main": "src/agent.ts",
+  "scripts": {
+    "start": "ts-node src/agent.ts",
+    "build": "tsc",
+    "start:compiled": "node dist/agent.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.39.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0",
+    "ts-node": "^10.9.2",
+    "@types/node": "^20.0.0"
+  }
+}
