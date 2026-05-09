@@ -6,11 +6,11 @@
  *   export ANTHROPIC_API_KEY=sk-ant-...
  *   npx ts-node agent.ts
  */
-
+ 
 import Anthropic from "@anthropic-ai/sdk";
-
+ 
 // ─── Config (hardcoded from soul.md) ─────────────────────────────────────────
-
+ 
 const AGENT_NAME = "akrizo-z";
 const ETH_ADDRESS = "0x2627fE41261429221faBE13aB91AA03ebf486Ba6";
 const SUPABASE_URL = "https://bqrapnlqqtjedjyhlfci.supabase.co/functions/v1/submit-solution";
@@ -18,11 +18,11 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 const LOOP_INTERVAL_MS = 5_000;   // 5s between solves
 const RATE_LIMIT_WINDOW = 10_000; // 10s
 const MAX_PER_WINDOW = 8;         // max 8 submissions per 10s per soul.md
-
+ 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY ?? "" });
-
+ 
 // ─── Types ────────────────────────────────────────────────────────────────────
-
+ 
 interface Puzzle {
   id: string;
   prompt: string;
@@ -30,22 +30,22 @@ interface Puzzle {
   difficulty: string;
   reward: number;
 }
-
+ 
 interface PullResponse {
   puzzle: Puzzle | null;
 }
-
+ 
 interface SubmitResponse {
   correct: boolean;
   reward?: number;
   balance?: number;
   error?: string;
 }
-
+ 
 // ─── Rate limiter ─────────────────────────────────────────────────────────────
-
+ 
 const submitTimestamps: number[] = [];
-
+ 
 async function rateLimitedSubmit(): Promise<void> {
   const now = Date.now();
   // Remove timestamps outside the window
@@ -59,9 +59,9 @@ async function rateLimitedSubmit(): Promise<void> {
   }
   submitTimestamps.push(Date.now());
 }
-
+ 
 // ─── Pull puzzle ──────────────────────────────────────────────────────────────
-
+ 
 async function pullPuzzle(): Promise<Puzzle | null> {
   const res = await fetch(`${SUPABASE_URL}?eth=${ETH_ADDRESS}`, {
     method: "GET",
@@ -70,26 +70,26 @@ async function pullPuzzle(): Promise<Puzzle | null> {
       "Authorization": `Bearer ${SUPABASE_ANON_KEY}`,
     },
   });
-
+ 
   if (res.status === 429) {
     log("⚠️  429 from server — backing off 15s");
     await sleep(15_000);
     return null;
   }
-
+ 
   if (!res.ok) {
     throw new Error(`Pull failed: ${res.status} ${await res.text()}`);
   }
-
-  const data: PullResponse = await res.json();
+ 
+  const data = await res.json() as PullResponse;
   return data.puzzle ?? null;
 }
-
+ 
 // ─── Solve puzzle with Claude ─────────────────────────────────────────────────
-
+ 
 async function solvePuzzle(puzzle: Puzzle): Promise<string> {
   log(`🧩 Solving [${puzzle.category}/${puzzle.difficulty}]: ${puzzle.prompt.slice(0, 80)}...`);
-
+ 
   const message = await anthropic.messages.create({
     model: "claude-sonnet-4-20250514",
     max_tokens: 512,
@@ -105,12 +105,12 @@ Rules:
         content: `Puzzle category: ${puzzle.category}
 Difficulty: ${puzzle.difficulty}
 Puzzle: ${puzzle.prompt}
-
+ 
 Return only the answer (lowercase, trimmed, single-spaced).`,
       },
     ],
   });
-
+ 
   const raw = message.content
     .filter((b) => b.type === "text")
     .map((b) => (b as any).text)
@@ -118,16 +118,16 @@ Return only the answer (lowercase, trimmed, single-spaced).`,
     .trim()
     .toLowerCase()
     .replace(/\s+/g, " ");
-
+ 
   log(`💡 Answer: "${raw}"`);
   return raw;
 }
-
+ 
 // ─── Submit solution ──────────────────────────────────────────────────────────
-
+ 
 async function submitSolution(puzzle: Puzzle, answer: string): Promise<SubmitResponse> {
   await rateLimitedSubmit();
-
+ 
   const res = await fetch(SUPABASE_URL, {
     method: "POST",
     headers: {
@@ -142,22 +142,22 @@ async function submitSolution(puzzle: Puzzle, answer: string): Promise<SubmitRes
       answer,
     }),
   });
-
+ 
   if (res.status === 429) {
     log("⚠️  429 on submit — backing off 15s");
     await sleep(15_000);
     return { correct: false, error: "rate_limited" };
   }
-
+ 
   if (!res.ok) {
     throw new Error(`Submit failed: ${res.status} ${await res.text()}`);
   }
-
-  return res.json();
+ 
+  return res.json() as Promise<SubmitResponse>;
 }
-
+ 
 // ─── Mining loop ──────────────────────────────────────────────────────────────
-
+ 
 async function mineOnce(): Promise<boolean> {
   // Pull
   const puzzle = await pullPuzzle();
@@ -165,32 +165,32 @@ async function mineOnce(): Promise<boolean> {
     log("😴 No puzzles available — pool exhausted or all solved. Waiting...");
     return false;
   }
-
+ 
   // Solve
   const answer = await solvePuzzle(puzzle);
-
+ 
   // Submit
   const result = await submitSolution(puzzle, answer);
-
+ 
   if (result.correct) {
     log(`🎉 Correct! +${result.reward} $NTC | Balance: ${result.balance} $NTC`);
   } else {
     log(`❌ Wrong answer for puzzle ${puzzle.id}. Moving on.`);
   }
-
+ 
   return true;
 }
-
+ 
 async function startMiningLoop(): Promise<void> {
   log("⛏  akrizo-z $NOCOIN Miner starting...");
   log(`📍 Wallet: ${ETH_ADDRESS}`);
   log(`🤖 Agent: ${AGENT_NAME}\n`);
-
+ 
   if (!process.env.ANTHROPIC_API_KEY) {
     console.error("❌  ANTHROPIC_API_KEY env var is required");
     process.exit(1);
   }
-
+ 
   while (true) {
     try {
       const solved = await mineOnce();
@@ -201,19 +201,19 @@ async function startMiningLoop(): Promise<void> {
     }
   }
 }
-
+ 
 // ─── Utils ────────────────────────────────────────────────────────────────────
-
+ 
 function log(msg: string): void {
   console.log(`[${new Date().toISOString()}] ${msg}`);
 }
-
+ 
 function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
 }
-
+ 
 // ─── Entry ────────────────────────────────────────────────────────────────────
-
+ 
 startMiningLoop().catch((err) => {
   console.error("Fatal:", err);
   process.exit(1);
