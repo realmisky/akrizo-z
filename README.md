@@ -1,57 +1,94 @@
-# $NOCOIN Miner Agent
+# akrizo-z
 
-Auto-mining agent following the `soul.md` protocol. Uses Claude to solve
-domain-specific AI challenges and auto-submits receipts on-chain.
+A small `soul.md`-style LLM agent that **triages GitHub issues**.
 
-## Setup
+It polls a repo for issues tagged `needs-triage`, reads each one, and asks an
+LLM to produce a structured triage plan: summary, category, severity,
+suggested labels, and follow-up questions for the reporter. Then — in dry-run
+mode by default — it either prints the plan or posts a single comment and
+applies labels from an explicit allowlist.
+
+**What it will never do:** close, lock, edit, delete, assign, transfer,
+apply labels outside the allowlist, or touch PRs. See [`soul.md`](./soul.md)
+for the full charter.
+
+---
+
+## Install
 
 ```bash
 npm install
-```
-
-Set environment variables:
-
-```bash
-export AGENT_ETH_ADDRESS=0xYourBaseWalletAddress
-export COORDINATOR_BASE_URL=https://your-coordinator-url   # from the recruit form / OpenClaw
-export ANTHROPIC_API_KEY=sk-ant-...
+cp .env.example .env
+# edit .env
 ```
 
 ## Run
 
 ```bash
-npm start
+npm start          # runs with ts-node, reads .env via your shell
 ```
+
+Or compile first:
+
+```bash
+npm run build
+node dist/agent.js
+```
+
+## Configuration
+
+See [`.env.example`](./.env.example). The important knobs:
+
+| Var               | Default              | Notes                                              |
+| ----------------- | -------------------- | -------------------------------------------------- |
+| `GITHUB_OWNER`    | —                    | Required.                                          |
+| `GITHUB_REPO`     | —                    | Required.                                          |
+| `GITHUB_TOKEN`    | —                    | Fine-grained PAT, `Issues: Read & Write` only.     |
+| `LLM_PROVIDER`    | `anthropic`          | Or `ollama` for a local model.                     |
+| `LLM_MODEL`       | provider default     | e.g. `claude-sonnet-4-20250514` or `llama3.1`.     |
+| `DRY_RUN`         | `true`               | Must be literal `false` to actually post comments. |
+| `TRIAGE_LABEL`    | `needs-triage`       | Only issues with this label are candidates.        |
+| `APPLIED_MARKER`  | `triaged-by-agent`   | Added to each issue after triage.                  |
+| `ALLOWED_LABELS`  | `bug,enhancement,…`  | Hard allowlist for label application.              |
 
 ## How it works
 
 ```
-Authenticate → GET /v1/challenge → Claude solves it → POST /v1/receipt → earn $NTC
-     ↑_______________________________________________________________|
-                        (loops every 15s)
+┌─────────────────────────────────────────────────────────────┐
+│ every POLL_INTERVAL_MS:                                     │
+│                                                             │
+│   list open issues labeled $TRIAGE_LABEL                    │
+│       └─ skip ones already carrying $APPLIED_MARKER         │
+│                                                             │
+│   for each candidate:                                       │
+│       llm.complete(system=soul + schema, user=title+body)   │
+│       validate JSON + clamp labels to allowlist             │
+│       dry-run? → log the plan                               │
+│       else    → comment + addLabels (incl. marker)          │
+└─────────────────────────────────────────────────────────────┘
 ```
 
-### Mining loop steps
+The LLM only ever returns JSON. It is never given tools. Every GitHub
+write is performed by the agent process, against the allowlist, with the
+`APPLIED_MARKER` added so the same issue isn't re-triaged on the next
+cycle.
 
-1. **Authenticate** — sends `AGENT_ETH_ADDRESS` to `/v1/auth`, gets a bearer token
-2. **Pull challenge** — `GET /v1/challenge` returns a domain document + entities + instructions
-3. **Sanitize** — blocks any prompt-injection patterns in coordinator response (Golden Rule 4)
-4. **Solve** — Claude reads the document, answers questions, generates artifact + reasoning trace
-5. **Submit** — `POST /v1/receipt` with artifact + trace + signature → earns 500+ $NTC
+## Using a local model
 
-### Tier rewards (from soul.md)
+No API key, no third-party inference:
 
-| Staked $NTC     | Reward per solve |
-|-----------------|-----------------|
-| ≥ 5,000,000     | 500 $NTC        |
-| ≥ 10,000,000    | 1,025 $NTC      |
-| ≥ 25,000,000    | 2,600 $NTC      |
-| ≥ 50,000,000    | 5,375 $NTC      |
-| ≥ 100,000,000   | 11,000 $NTC     |
+```bash
+# in one terminal
+ollama run llama3.1
 
-## Security features
+# in another
+LLM_PROVIDER=ollama LLM_MODEL=llama3.1 npm start
+```
 
-- Coordinator responses are **never trusted as instructions** — sanitized before use
-- `AGENT_ETH_ADDRESS` only sent to the configured coordinator endpoint
-- No automatic ETH transfers — receipt submission only
-- Blocked patterns: wallet transfers, credential disclosure, system prompt injection
+## Trying it safely
+
+1. Point it at a **test repo you own.**
+2. Create a label `needs-triage`, open a few issues, and add the label.
+3. Run with default `DRY_RUN=true` and read the planned comments/labels
+   in the terminal.
+4. Only flip `DRY_RUN=false` once you're happy with what it would do.
