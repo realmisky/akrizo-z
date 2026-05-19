@@ -1,0 +1,60 @@
+{
+  "_comment": "NullFee crosschain testnet CLI config. Copy to nullfee.config.json and fill in real values from DevTools → Network. Defaults below are pre-filled with confirmed NullFee endpoints — only username/password go in .env.",
+
+  "apiBase": "https://nullfee.io/api",
+
+  "defaultHeaders": {
+    "Origin":           "https://nullfee.io",
+    "Referer":          "https://nullfee.io/",
+    "Accept-Language":  "en-US,en;q=0.9"
+  },
+
+  "endpoints": {
+    "login":      { "method": "POST", "path": "/auth/login" },
+    "balance":    { "method": "GET",  "path": "/auth/me" },
+    "swap":       { "method": "POST", "path": "/swap" },
+    "mysteryBox": { "method": "POST", "path": "/quests/mystery-box" },
+    "dailySpin":  { "method": "POST", "path": "/quests/daily-spin" }
+  },
+
+  "auth": {
+    "_note": "NullFee uses session cookies (nullfee.sid). Set-Cookie is captured automatically. authHeader/authPrefix are unused unless the API also accepts Bearer tokens.",
+    "loginBodyTemplate": {
+      "username": "{{USERNAME}}",
+      "password": "{{PASSWORD}}"
+    },
+    "authHeader": "Authorization",
+    "authPrefix": "Bearer "
+  },
+
+  "swap": {
+    "_note": "Swap is crosschain bridge. Confirmed payload shape: {fromChain, toChain, fromToken, toToken, amountUsd}. amountUsd is a NUMBER (USD). balanceField points at user.balanceUsdCents from /auth/me — minBalance is in cents, so 200 = $2.00.",
+
+    "pairs": [
+      { "chain": "bsc",      "token": "USDT", "decimals": 2 },
+      { "chain": "ethereum", "token": "USDT", "decimals": 2 },
+      { "chain": "ethereum", "token": "USDC", "decimals": 2 },
+      { "chain": "bsc",      "token": "USDC", "decimals": 2 },
+      { "chain": "arbitrum", "token": "USDT", "decimals": 2 },
+      { "chain": "polygon",  "token": "USDT", "decimals": 2 }
+    ],
+
+    "bodyTemplate": {
+      "fromChain": "{{TOKEN_IN_CHAIN}}",
+      "toChain":   "{{TOKEN_OUT_CHAIN}}",
+      "fromToken": "{{TOKEN_IN_TOKEN}}",
+      "toToken":   "{{TOKEN_OUT_TOKEN}}",
+      "amountUsd": "{{AMOUNT}}"
+    },
+
+    "amountRange":            { "min": 1, "max": 10 },
+    "delaySecondsRange":      { "min": 8, "max": 25 },
+    "balanceField":           "user.balanceUsdCents",
+    "minBalance":             200,
+    "requireDifferentChains": true,
+    "maxIterations":          500
+  },
+
+  "mysteryBox": { "bodyTemplate": {} },
+  "dailySpin":  { "bodyTemplate": {} }
+}

@@ -1,0 +1,14 @@
+node_modules/
+dist/
+
+# secrets / local config
+.env
+.env.local
+nullfee.config.json
+.nullfee-state/
+
+# editor / OS
+.DS_Store
+*.log
+.vscode/
+.idea/
