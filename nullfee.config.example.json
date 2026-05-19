@@ -1,0 +1,49 @@
+{
+  "_comment": "Copy this file to nullfee.config.json and fill in real values from DevTools → Network. See nullfee/README.md for a step-by-step guide.",
+
+  "apiBase": "https://nullfee.io/api",
+
+  "defaultHeaders": {
+    "Origin":  "https://nullfee.io",
+    "Referer": "https://nullfee.io/"
+  },
+
+  "endpoints": {
+    "login":      { "method": "POST", "path": "/auth/login",         "tokenPath": "data.token" },
+    "balance":    { "method": "GET",  "path": "/wallet/balance" },
+    "swap":       { "method": "POST", "path": "/swap" },
+    "mysteryBox": { "method": "POST", "path": "/quests/mystery-box" },
+    "dailySpin":  { "method": "POST", "path": "/quests/daily-spin" }
+  },
+
+  "auth": {
+    "loginBodyTemplate": {
+      "email":    "{{EMAIL}}",
+      "password": "{{PASSWORD}}"
+    },
+    "authHeader": "Authorization",
+    "authPrefix": "Bearer "
+  },
+
+  "swap": {
+    "tokens": [
+      { "symbol": "USDT", "id": "1", "decimals": 6  },
+      { "symbol": "USDC", "id": "2", "decimals": 6  },
+      { "symbol": "ETH",  "id": "3", "decimals": 18 },
+      { "symbol": "BNB",  "id": "4", "decimals": 18 }
+    ],
+    "bodyTemplate": {
+      "fromToken": "{{TOKEN_IN_SYMBOL}}",
+      "toToken":   "{{TOKEN_OUT_SYMBOL}}",
+      "amount":    "{{AMOUNT}}"
+    },
+    "amountRange":       { "min": 1, "max": 5 },
+    "delaySecondsRange": { "min": 8, "max": 25 },
+    "balanceField":      "data.balance",
+    "minBalance":        1,
+    "maxIterations":     500
+  },
+
+  "mysteryBox": { "bodyTemplate": {} },
+  "dailySpin":  { "bodyTemplate": {} }
+}

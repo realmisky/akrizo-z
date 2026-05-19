@@ -1,19 +1,27 @@
 {
   "name": "nocoin-miner",
-  "version": "1.0.0",
-  "description": "Auto-mining soul.md agent for $NOCOIN",
+  "version": "1.1.0",
+  "description": "Auto-mining soul.md agent for $NOCOIN + NullFee crosschain testnet CLI",
   "main": "src/agent.ts",
   "scripts": {
     "start": "ts-node src/agent.ts",
     "build": "tsc",
-    "start:compiled": "node dist/agent.js"
+    "start:compiled": "node dist/agent.js",
+    "nullfee": "ts-node nullfee/index.ts",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.39.0"
+    "@anthropic-ai/sdk": "^0.39.0",
+    "chalk": "^4.1.2",
+    "dotenv": "^16.4.5",
+    "ethers": "^6.13.4",
+    "inquirer": "^9.3.7",
+    "ora": "^5.4.1"
   },
   "devDependencies": {
     "typescript": "^5.4.0",
     "ts-node": "^10.9.2",
-    "@types/node": "^20.0.0"
+    "@types/node": "^20.0.0",
+    "@types/inquirer": "^9.0.7"
   }
 }
