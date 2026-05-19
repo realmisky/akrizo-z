@@ -42,7 +42,7 @@ async function main() {
   const client = new HttpClient(cfg);
 
   log.info(`API base: ${cfg.apiBase}`);
-  log.info(`Account:  ${creds.email}`);
+  log.info(`Account:  ${creds.login}`);
 
   await ensureAuthed(cfg, creds, client);
 

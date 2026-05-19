@@ -1,9 +1,10 @@
 import { HttpClient, HttpError } from "./client";
-import type { NullFeeConfig } from "./config";
+import type { NullFeeConfig, SwapPairDef } from "./config";
 import { log } from "./logger";
 import {
   applyTemplate,
   getDeep,
+  pickRandom,
   pickTwoDifferent,
   randomFloat,
   randomInt,
@@ -24,18 +25,39 @@ export async function getBalance(
   return { raw, value: Number.isFinite(num as number) ? (num as number) : null };
 }
 
+/** Pick two pair entries; if requireDifferentChains, retry until chains differ. */
+function pickRandomPair(
+  pairs: SwapPairDef[],
+  requireDifferentChains: boolean
+): [SwapPairDef, SwapPairDef] {
+  for (let attempt = 0; attempt < 25; attempt++) {
+    const [a, b] = pickTwoDifferent(pairs);
+    if (!requireDifferentChains) return [a, b];
+    if (a.chain && b.chain && a.chain !== b.chain) return [a, b];
+  }
+  // fallback — caller may want any pair even if chains repeat
+  return pickTwoDifferent(pairs);
+}
+
 export async function runSwapLoop(
   cfg: NullFeeConfig,
   client: HttpClient
 ): Promise<void> {
-  const { tokens, amountRange, delaySecondsRange, minBalance, maxIterations } =
-    cfg.swap;
+  const {
+    pairs,
+    amountRange,
+    delaySecondsRange,
+    minBalance,
+    maxIterations,
+    requireDifferentChains,
+  } = cfg.swap;
 
-  log.info(`Tokens:        ${tokens.map((t) => t.symbol).join(", ")}`);
+  log.info(`Pairs:         ${pairs.map((p) => p.label).join(", ")}`);
   log.info(`Amount range:  ${amountRange.min} – ${amountRange.max}`);
   log.info(`Delay range:   ${delaySecondsRange.min} – ${delaySecondsRange.max}s`);
+  if (requireDifferentChains) log.info(`Crosschain only: yes (fromChain ≠ toChain)`);
   if (minBalance != null) {
-    log.info(`Stop when balance < ${minBalance} (${cfg.swap.balanceField || "?"})`);
+    log.info(`Stop when ${cfg.swap.balanceField || "balance"} < ${minBalance}`);
   }
   log.info(`Max iterations: ${maxIterations}`);
 
@@ -59,19 +81,23 @@ export async function runSwapLoop(
       }
     }
 
-    const [tIn, tOut] = pickTwoDifferent(tokens);
-    const amount = randomFloat(amountRange.min, amountRange.max, tIn.decimals ?? 6);
+    const [tIn, tOut] = pickRandomPair(pairs, !!requireDifferentChains);
+    const amount = randomFloat(
+      amountRange.min,
+      amountRange.max,
+      tIn.decimals ?? 2
+    );
 
-    log.step(`#${i}  Swap ${amount} ${tIn.symbol} → ${tOut.symbol}`);
+    log.step(`#${i}  Swap ${amount} ${tIn.label} → ${tOut.label}`);
 
     const body = applyTemplate(cfg.swap.bodyTemplate, {
-      TOKEN_IN_SYMBOL:  tIn.symbol,
-      TOKEN_IN_ID:      tIn.id      ?? "",
-      TOKEN_IN_ADDR:    tIn.address ?? "",
-      TOKEN_OUT_SYMBOL: tOut.symbol,
-      TOKEN_OUT_ID:     tOut.id      ?? "",
-      TOKEN_OUT_ADDR:   tOut.address ?? "",
-      AMOUNT:           amount,
+      TOKEN_IN_CHAIN:  tIn.chain  ?? "",
+      TOKEN_IN_TOKEN:  tIn.token,
+      TOKEN_IN_LABEL:  tIn.label  ?? tIn.token,
+      TOKEN_OUT_CHAIN: tOut.chain ?? "",
+      TOKEN_OUT_TOKEN: tOut.token,
+      TOKEN_OUT_LABEL: tOut.label ?? tOut.token,
+      AMOUNT:          amount,
     });
 
     try {
@@ -85,12 +111,12 @@ export async function runSwapLoop(
       fail++;
 
       if (e instanceof HttpError) {
-        if (/insufficient|balance|low|not enough/i.test(msg)) {
+        if (/insufficient|balance|low|not enough|cannot afford/i.test(msg)) {
           log.warn("Detected insufficient balance — stop swap loop");
           break;
         }
         if (e.status === 401 || e.status === 403) {
-          log.err("Unauthorized — token expired? Stopping. Try `Re-login`.");
+          log.err("Unauthorized — session expired? Stopping. Try `Re-login`.");
           break;
         }
       }
@@ -164,3 +190,6 @@ function formatResp(r: any): string {
     return String(r);
   }
 }
+
+// silence unused-import lint when pickRandom isn't directly referenced here
+void pickRandom;

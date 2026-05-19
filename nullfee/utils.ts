@@ -31,12 +31,26 @@ export function getDeep(obj: any, dotPath: string | undefined): any {
     .reduce((acc, key) => (acc == null ? acc : acc[key]), obj);
 }
 
-/** Replace {{VAR}} placeholders in any nested string within the template. */
+type TemplateValue = string | number | boolean;
+
+/**
+ * Replace {{VAR}} placeholders in any nested string within the template.
+ *
+ * Special case: if a string is *exactly* `"{{NAME}}"` (no surrounding text)
+ * and the substituted value is a number/boolean, the raw value is returned
+ * (preserving its type). This lets a JSON template like
+ * `{ "amountUsd": "{{AMOUNT}}" }` produce `{ amountUsd: 10 }` (number),
+ * not `{ amountUsd: "10" }` (string).
+ */
 export function applyTemplate(
   obj: any,
-  vars: Record<string, string | number>
+  vars: Record<string, TemplateValue>
 ): any {
   if (typeof obj === "string") {
+    const exact = obj.match(/^\{\{(\w+)\}\}$/);
+    if (exact && vars[exact[1]] !== undefined) {
+      return vars[exact[1]];           // preserve original type
+    }
     return obj.replace(/\{\{(\w+)\}\}/g, (_, key) =>
       vars[key] !== undefined ? String(vars[key]) : `{{${key}}}`
     );
